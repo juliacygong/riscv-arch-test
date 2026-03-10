@@ -734,13 +734,7 @@ def _generate_stvec_tests(test_data: TestData) -> list[str]:
 
 def _generate_xstatus_ie_tests(test_data: TestData) -> list[str]:
     """
-    cp_xstatus_ie: ecall crossed with
-        mode          in {S, U}
-        medeleg[8]    in {0, 1}   (ecall-from-U delegation bit)
-        mstatus.MIE   in {0, 1}   (bit 3)
-        mstatus.SIE   in {0, 1}   (bit 1)
-    Total: 2 modes * 2 medeleg * 2 MIE * 2 SIE = 16 test cases.
-    All CSR configuration is done from M-mode before dropping to the test mode.
+    ecall cross {mode = user/supervisor, medeleg[8] = {0/1}, mie = {0/1}, sie = {0/1}}
     """
     covergroup, coverpoint = "ExceptionsS_cg", "cp_xstatus_ie"
     save_reg, mask_mie, mask_sie, medeleg_reg = test_data.int_regs.get_registers(4, exclude_regs=[0])
