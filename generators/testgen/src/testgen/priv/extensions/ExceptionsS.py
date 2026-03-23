@@ -556,6 +556,8 @@ def _generate_medeleg_msu_tests(test_data: TestData) -> list[str]:
             if priv_mode != 3:
                 lines.append(f"RVTEST_GOTO_LOWER_MODE {_MODE_MACRO[priv_mode]}")
 
+            lines.append(".align 3")  # 8-byte align so handler's fixed +8 skip always lands cleanly
+
             # rs1 is set to PC + base_offset for rs1[1:0]
             # jalr controls the offset[1:0], which covers all 16 combinations of (rs1+offset)[1:0]
             rs1_base_offsets = {0: 8, 1: 5, 2: 6, 3: 7}
@@ -653,9 +655,10 @@ def _generate_medeleg_msu_tests(test_data: TestData) -> list[str]:
             coverpoint = "cp_medeleg_msu_illegalinstruction"
             lines.extend(
                 [
-                    ".align 2",
                     test_data.add_testcase(f"illegal_{tag}", coverpoint, covergroup),
-                    ".word 0x00000000",
+                    ".align 2",  # 8-byte align so handler's +8 skip lands on ecall testcase
+                    ".insn 0x00",
+                    "nop",
                     "nop",
                 ]
             )
@@ -665,6 +668,7 @@ def _generate_medeleg_msu_tests(test_data: TestData) -> list[str]:
             lines.extend(
                 [
                     test_data.add_testcase(f"ecall_{tag}", coverpoint, covergroup),
+                    ".align 2",
                     "ecall",
                     "nop",
                 ]
@@ -677,16 +681,6 @@ def _generate_medeleg_msu_tests(test_data: TestData) -> list[str]:
                     lines.append("RVTEST_GOTO_DELEGATED_MMODE")
                 else:
                     lines.append("RVTEST_GOTO_MMODE")
-
-    # Restore medeleg to all zeros
-    lines.extend(
-        [
-            "\n# Restore medeleg to all zeros",
-            "RVTEST_GOTO_DELEGATED_MMODE  # safe regardless of final medeleg state",
-            f"LI(x{data_reg}, 0)",
-            f"csrw medeleg, x{data_reg}",
-        ]
-    )
 
     test_data.int_regs.return_registers([addr_reg, data_reg, check_reg])
     return lines
@@ -857,7 +851,15 @@ def make_exceptionss(test_data: TestData) -> list[str]:
     lines.extend(_generate_misaligned_priority_store_tests(test_data))
     lines.extend(_generate_misaligned_priority_fetch_tests(test_data))
     lines.extend(["RVTEST_GOTO_MMODE  # return to M-mode before medeleg, stvec, xstatus tests"])
-    # lines.extend(_generate_medeleg_msu_tests(test_data))
+    lines.extend(_generate_medeleg_msu_tests(test_data))
+    lines.extend(
+        [
+            "\n# Clear medeleg immediately in M-mode (last iteration left medeleg=0xb1ff)",
+            "LI(x5, 0)",
+            "csrw medeleg, x5",  # clear before ANY mode transitions
+            # now medeleg=0, safe to do anything
+        ]
+    )
     # lines.extend(_generate_stvec_tests(test_data))
     # lines.extend(_generate_xstatus_ie_tests(test_data))
 
